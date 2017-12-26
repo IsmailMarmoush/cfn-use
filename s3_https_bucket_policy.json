@@ -1,0 +1,18 @@
+{
+  "Version": "2008-10-17",
+  "Id": "SecTransport",
+  "Statement": [
+    {
+      "Sid": "EnableSecureTransport",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::${YOUR_BUCKET_NAME_HERE}/*",
+      "Condition": {
+        "Bool": {
+          "aws:SecureTransport": "false"
+        }
+      }
+    }
+  ]
+}

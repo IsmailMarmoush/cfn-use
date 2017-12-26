@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Role and instance profile.  Current thinking is to use this role for every
+  access needed by anything in one VPC.  Currently Grants everything.
+  not including path or name.  Parameters are not currently used.
+  Version 0.5
+
+Parameters:
+  Environment:
+    Description: 'Account name such as lab, arch, prod'
+    Type: String
+  Owner:
+    Description: 'Owner of this object, usually r number'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+
+Resources:
+  VPCRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - 'ec2.amazonaws.com'
+                - 'redshift.amazonaws.com'
+            Action:
+              - "sts:AssumeRole"
+
+      Policies:
+        -
+          PolicyName: "VPCRolePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            # note that this wide open permission allows me to grant an ec2
+            # instance more permissions that I have.  I can now create users
+            # and groups for example
+              -
+                Effect: "Allow"
+                Action: "*"
+                Resource: "*"
+
+  VPCInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        -
+          Ref: "VPCRole"
+
+Outputs:
+  VPCInstanceProfile:
+    Description: 'name of instance profile accociated with role'
+    Value: !Ref 'VPCInstanceProfile'
+    Export:
+      Name: 'mwest-instance-profile'
+  VPCRoleName:
+    Description: 'name of role'
+    Value: !Ref 'VPCRole'
+    Export:
+      Name: 'mwest-godrole'
+  VPCRoleArn:
+    Description: 'arn of role'
+    Value: !GetAtt VPCRole.Arn
+    Export:
+      Name: 'mwest-godrole-arn'

@@ -1,0 +1,4 @@
+{
+  # use '' rather than null as cfn templates do not accept null values for parameters
+  SnapshotIdentifier: '' 
+}

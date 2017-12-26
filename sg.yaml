@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+    Security groups
+    create all security groups and export thier ids
+    for reference in other templates
+    Added my ip - hardcoded
+    Version 0.7
+
+Parameters:
+  Environment:
+    Description: 'Account name such as lab, arch, prod'
+    Type: String
+  Owner:
+    Description: 'Owner of this object'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+
+Resources:
+  # for within VPC
+  # demonstrates how to set up a self-referencing security group
+  # without 'deadlock'
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: allow any connection from this group itself
+      VpcId: !ImportValue 'mwest-vpc-id'
+
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  # allow security group to access itself for all things
+  PrivateSecuirtyGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref 'PrivateSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'PrivateSecurityGroup'
+
+  # allow ssh/ping from home
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion security group to allow ssh and ping
+      VpcId: !ImportValue 'mwest-vpc-id'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: '71.236.139.117/32'
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: '71.236.139.117/32'
+
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+Outputs:
+  BastionSg:
+    Description: 'Bastion Security Group id'
+    Value: !Ref 'BastionSecurityGroup'
+    Export:
+        Name: 'mwest-bastion-sg'
+
+  PrivateSg:
+    Description: 'Private Security Group id'
+    Value: !Ref 'PrivateSecurityGroup'
+    Export:
+        Name: 'mwest-private-sg'

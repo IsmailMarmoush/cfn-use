@@ -1,0 +1,4 @@
+{
+  S3BucketHome: '{{S3BucketHome}}',
+  KeyName: '{{Owner}}-{{Environment}}'
+}

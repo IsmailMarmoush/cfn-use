@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Minimum Redshift setting to get started
+  Tags are not supported by redshift cfn
+  TODO
+    logging
+    test restoring from snapshot
+    enable enhanced vpc routing when cfn supports it
+    enable tags when cfn supports it
+  Version 0.4
+
+Parameters:
+  Environment:
+      Description: 'Account name such as lab, arch, prod'
+      Type: String
+  Owner:
+    Description: 'Owner of this object, usually r number'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+  Password:
+    Description: 'Master password for instance'
+    NoEcho: true
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+    # fix pattern to be accurate to allowed passwords
+    # or better, switch to IAM temporary credentials
+    # http://docs.aws.amazon.com/redshift/latest/mgmt/generating-user-credentials.html
+    # AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: must contain only alphanumeric characters.
+  SnapshotIdentifier:
+      Description: The name of a cluster snapshot (optional)
+      Default: ''
+      Type: String
+
+Conditions:
+    UseClusterSnapshot: !Not [!Equals [!Ref SnapshotIdentifier, '']]
+
+Resources:
+
+  RedshiftParameterGroup:
+    Type: AWS::Redshift::ClusterParameterGroup
+    Properties:
+      Description: Custom parameter group for redshift
+      ParameterGroupFamily: redshift-1.0
+      Parameters:
+      - ParameterName: enable_user_activity_logging
+        ParameterValue: 'true'
+
+  Redshift:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      ClusterSubnetGroupName: !ImportValue 'mwest-redshift-subnet-group-id'
+      ClusterParameterGroupName: !Ref RedshiftParameterGroup
+      IamRoles:
+        - !ImportValue 'mwest-godrole-arn'
+      DBName: 'test'
+      MasterUsername: 'billybob'
+      MasterUserPassword: !Ref Password
+      ClusterType: 'single-node'
+      NodeType: 'dc2.large'
+      Encrypted: 'true'
+      PubliclyAccessible: 'false'
+      SnapshotIdentifier: !If [UseClusterSnapshot, !Ref SnapshotIdentifier, !Ref 'AWS::NoValue']
+      VpcSecurityGroupIds:
+        - !ImportValue 'mwest-private-sg'
+
+Outputs:
+  ClusterEndpoint:
+    Description: Redshift database endpoint
+    Value: !Sub '${Redshift.Endpoint.Address}:${Redshift.Endpoint.Port}'

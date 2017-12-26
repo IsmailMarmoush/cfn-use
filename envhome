@@ -1,0 +1,21 @@
+# my personal account
+# only every used one profile at home
+export AWS_DEFAULT_PROFILE=default
+export OWNER=mwest
+export PRODUCT=home
+export S3BUCKET=mwest-versions
+
+# shouldn't need python path since I am installing module
+# `python setup.py install
+# from https://github.com/quagly/cfn-manage
+# leave it for now until this works
+export PYTHONPATH=/home/mwest/aws/cloudformation
+
+# not sure if creation of redshift is dynamic
+# based on enviornment
+# so leaving these alone until I it works
+export PGHOST=localhost
+export PGDATABASE=permission_test
+export PGPORT=5439
+export PGUSER=r619185
+

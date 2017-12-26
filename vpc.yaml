@@ -1,0 +1,328 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Network Stack
+    VPC
+    public/private subnets
+    Internet Gateway (IG)
+    public routes to IG
+    public ip by default in public subnets
+    s3 vpc endpoint
+    nat gateway for each AZ
+    rds db subnet group
+    redshift subnet group
+    Version 1.0
+
+Parameters:
+  Environment:
+    Description: 'Account name such as lab, arch, prod'
+    Type: String
+  Owner:
+    Description: 'Owner of this object, usually r number'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+
+Resources:
+
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.54.0.0/22' # room for 4 class C subnets, two public, two private
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  SubnetAPublic:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-west-2a'
+      CidrBlock: '10.54.0.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  SubnetBPublic:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: 'us-west-2b'
+      CidrBlock: '10.54.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  SubnetAPrivate:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: 'us-west-2a'
+      CidrBlock: '10.54.2.0/24'
+      VpcId: !Ref VPC
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  SubnetBPrivate:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: 'us-west-2b'
+      CidrBlock: '10.54.3.0/24'
+      VpcId: !Ref VPC
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  RDSSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: 'Why is description required?  subnet group for rds'
+      SubnetIds:
+              - !Ref SubnetAPrivate
+              - !Ref SubnetBPrivate
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  RedshiftSubnetGroup:
+    Type: "AWS::Redshift::ClusterSubnetGroup"
+    Properties:
+      Description: 'Why is description required?  subnet group for redshift'
+      SubnetIds:
+              - !Ref SubnetAPrivate
+              - !Ref SubnetBPrivate
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  # seperate NAT for each AZ
+  NatGatewayAEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: VPC
+
+  NatGatewayBEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: VPC
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayAEIP.AllocationId
+      SubnetId: !Ref SubnetAPublic
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayBEIP.AllocationId
+      SubnetId: !Ref SubnetBPublic
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetAPublic
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref SubnetBPublic
+
+
+  PrivateRouteTableA:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref SubnetAPrivate
+
+  PrivateRouteTableB:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref SubnetBPrivate
+
+  S3Endpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      RouteTableIds:
+      - !Ref PublicRouteTable
+      - !Ref PrivateRouteTableA
+      - !Ref PrivateRouteTableB
+      ServiceName: com.amazonaws.us-west-2.s3
+      VpcId: !Ref VPC
+
+Outputs:
+  SubnetAPublic:
+    Description: 'SubnetAPublic id'
+    Value: !Ref SubnetAPublic
+    Export:
+      Name: 'mwest-vpc-public-a'
+
+  SubnetBPublic:
+    Description: 'SubnetBPublic id'
+    Value: !Ref SubnetBPublic
+    Export:
+      Name: 'mwest-vpc-public-b'
+
+  SubnetAPrivate:
+    Description: 'SubnetAPrivate id'
+    Value: !Ref SubnetAPrivate
+    Export:
+      Name: 'mwest-vpc-private-a'
+
+  SubnetBPrivate:
+    Description: 'SubnetBPrivate id'
+    Value: !Ref SubnetBPrivate
+    Export:
+      Name: 'mwest-vpc-private-b'
+
+  VPC:
+    Description: 'VPC id'
+    Value: !Ref VPC
+    Export:
+      Name: 'mwest-vpc-id'
+
+  RDSSubnetGroup:
+      Description: 'RDS Subnet Group id'
+      Value: !Ref RDSSubnetGroup
+      Export:
+        Name: 'mwest-rds-subnet-group-id'
+
+  RedshiftSubnetGroup:
+      Description: 'Redshift Subnet Group id'
+      Value: !Ref RedshiftSubnetGroup
+      Export:
+        Name: 'mwest-redshift-subnet-group-id'

@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+    Bastion ec2 with security group
+    for testing vpc and stack references
+    sets up home dir for ec2-user
+    Version 0.4
+
+Parameters:
+  S3BucketHome:
+    Description: 's3 bucket in us-west-2 containing /cloudformation/home.tar.gz'
+    Type: String
+  KeyName:
+    Description: 'keypair name'
+    Type: AWS::EC2::KeyPair::KeyName
+  Environment:
+    Description: 'Account name such as lab, arch, prod'
+    Type: String
+  Owner:
+    Description: 'Owner of this object, usually r number'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+
+
+Resources:
+
+  Bastion:
+    Type: 'AWS::EC2::Instance'
+    Metadata:
+      AWS::CloudFormation::Init:
+        # use configSets to set the order of operations
+        # note that the cnf-init command can run configSets in order
+        configSets:
+          # complicated to just run some commands in order.  consider using script/ansible
+          ordered:
+            - 'config'
+            - 'setPermissions'
+            - 'copyHome'
+        config:
+          packages:
+            yum:
+              # latest mysql client
+              # Make this dynamic to get the latest
+              mysql56: []
+              # old postgres 8 client for best redshift compatability
+              postgresql8: []
+              # tmux for tmux
+              tmux: []
+          sources:
+            # get home directory contents
+            # note that unpacking directly into /home/ec2-user prevents ssh login
+            # because when unpacking into an existing directory
+            # the directory owner and gets changed to the root directory of the tar ball owner
+            # so unpacking to temp, setting permissions and then copy over
+            # this way I can debug issues from /tmp files
+            /tmp/home: !Sub 'https://s3-us-west-2.amazonaws.com/${S3BucketHome}/cloudformation/home.tar.gz'
+
+        setPermissions:
+          # set ownership and permissions of unpacked sources files
+          commands:
+            setOwner:
+              command: 'chown --recursive ec2-user:ec2-user /tmp/home'
+            # because the recursive copy preserves ownership
+            # must set to 700 or ec2-user home dir permissions
+            # get changed and ssh may fail
+            setPermissions:
+              command: 'chmod --recursive 700 /tmp/home'
+        copyHome:
+          # copy files to home directory preserving ownership and other attributes
+          commands:
+            copy:
+              command: 'cp --recursive --preserve /tmp/home/. /home/ec2-user'
+
+      # set role and scope for init process
+      AWS::CloudFormation::Authentication:
+        S3AccessCreds:
+          type: 'S3'
+          buckets:
+            - !Ref S3BucketHome
+          roleName: !ImportValue 'mwest-godrole'
+    Properties:
+      InstanceType: 't2.nano'
+      SecurityGroupIds:
+        - !ImportValue 'mwest-bastion-sg'
+        - !ImportValue 'mwest-private-sg'
+      KeyName: !Ref KeyName
+      # ImageId: 'ami-5ec1673e'
+      ImageId: 'ami-bf4193c7'
+      IamInstanceProfile: !ImportValue 'mwest-instance-profile'
+      SubnetId: !ImportValue 'mwest-vpc-public-a'
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -xe
+            /usr/bin/yum update -y --security
+            /usr/bin/yum update -y aws-cfn-bootstrap
+            /usr/bin/yum update -y aws-cli
+            /usr/bin/yum update -y python27-botocore
+            /usr/bin/pip install --upgrade pip
+            # execute metadata config
+            /opt/aws/bin/cfn-init -v --configsets ordered --stack ${AWS::StackName} --resource Bastion  --region ${AWS::Region}
+            # signal the status from cfn-init, see CreationPolicy below
+            # note that signal is also a cloudformation event
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Bastion  --region ${AWS::Region}
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+    # wait for userdata script to complete cfn-init
+    # rollback if script fails or timesout
+    # set to 15 minutes ot see if it completes
+    CreationPolicy:
+      ResourceSignal:
+       # ISO8601 duration format
+        Timeout: PT5M
+
+
+# not exporting public ip as I don't need it in other cf templates yet
+Outputs:
+  PublicIP:
+    Description: 'public ip of ec2 instance'
+    Value: !GetAtt Bastion.PublicIp

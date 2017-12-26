@@ -1,0 +1,14 @@
+# many things can go wrong with ec2 creating
+# the CreationPolicy has a time out that causes the stack to rollback on error
+# however, all of the logs are on the server
+# so comment out the creation policy so that the ec2 instances stays around
+# so that you can look at the logs
+
+# there are two log locations
+# one is /var/log/
+# cloud-init.log - mostly initialization stuff
+# cloud-init-output.log - mostly output of running, likely error are in here
+
+# other location is the scripts that run
+/var/lib/cloud/instance
+

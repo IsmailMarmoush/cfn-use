@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Minimum Aurora setting to get started
+  TODO
+    read/write to s3 bucket
+    logging
+    cluster parameter and db parameter groups needed?
+  Version 0.3
+
+Parameters:
+  Environment:
+      Description: 'Account name such as lab, arch, prod'
+      Type: String
+  Owner:
+    Description: 'Owner of this object, usually r number'
+    Type: String
+  Product:
+    Description: 'Product name, or managers name'
+    Type: String
+  Password:
+    Description: 'Master password for instance'
+    NoEcho: true
+    Type: String
+  DBSnapshotName:
+      Description: 'The name of a DB snapshot (optional)'
+      Default: ''
+      Type: String
+
+Conditions:
+    UseDBSnapshot: !Not [!Equals [!Ref DBSnapshotName, '']]
+
+Resources:
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBSubnetGroupName: !ImportValue 'mwest-rds-subnet-group-id'
+      Engine: aurora
+      MasterUsername: 'billybob'
+      MasterUserPassword: !Ref Password
+      StorageEncrypted: true
+      DBSnapshotIdentifier: !If [UseDBSnapshot, !Ref DBSnapshotName, !Ref 'AWS::NoValue']
+      VpcSecurityGroupIds:
+        - !ImportValue 'mwest-private-sg'
+      Tags:
+      -
+        Key: 'Environment'
+        Value: !Ref Environment
+      -
+        Key: 'Product'
+        Value: !Ref Product
+      -
+        Key: 'TechOwner'
+        Value: !Ref Owner
+
+  AuroraDBInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !ImportValue 'mwest-rds-subnet-group-id'
+      Engine: aurora
+      DBClusterIdentifier: !Ref AuroraCluster
+      CopyTagsToSnapshot: true
+      PubliclyAccessible: 'false'
+      DBInstanceClass: db.t2.small
+
+  AuroraDBInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !ImportValue 'mwest-rds-subnet-group-id'
+      Engine: aurora
+      DBClusterIdentifier: !Ref AuroraCluster
+      CopyTagsToSnapshot: true
+      PubliclyAccessible: 'false'
+      DBInstanceClass: db.t2.small
+
+Outputs:
+  EndPointAddress:
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Description: Aurora database endpoint name
